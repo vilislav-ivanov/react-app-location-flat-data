@@ -1,24 +1,70 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+const url = "https://randomuser.me/api/?results=20";
+
+interface Location {
+  city: String,
+  country: String,
+  postalCode: String,
+  state: String,
+  coordinate: {
+    latitude: String,
+    longitude: String,
+  },
+  street: {
+    number: Number,
+    name: String
+  }
+}
+interface FlatLocation {
+  city: String,
+  country: String,
+  postalCode: String,
+  state: String,
+  latitude: String,
+  longitude: String,
+  streetNumber: Number,
+  streetName: String
+}
+
+interface Result {
+  location: Location
+}
+
+interface FetchData {
+  results: Result[]
+}
+
+const flatLocations = (locations: Location[]): FlatLocation[] => {
+  return locations.map(({coordinate, street, ...rest}): FlatLocation => {
+    return {
+      ...rest,
+      streetName: street.name,
+      streetNumber: street.number,
+      latitude: coordinate?.latitude,
+      longitude: coordinate?.longitude
+    }
+  })
+}
 
 function App() {
+  const [locations, setLocations] = useState<FlatLocation[]>([]);
+  useEffect(() => {
+    const fetchData = async () => {
+      const { data } = await axios.get<FetchData>(url)
+      const { results } = data;
+      const fetchedLocations = results.map((res) => res.location);
+      const flatedLocations = flatLocations(fetchedLocations);
+      setLocations(flatedLocations);
+    }
+    fetchData();
+  }, [])
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      {locations.length > 0 ? (
+        'Render location here'
+      ) : 'No location fetched' }
     </div>
   );
 }
