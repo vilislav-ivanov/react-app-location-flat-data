@@ -6,9 +6,9 @@ const url = "https://randomuser.me/api/?results=20";
 interface Location {
   city: String,
   country: String,
-  postalCode: String,
+  postcode: String,
   state: String,
-  coordinate: {
+  coordinates: {
     latitude: String,
     longitude: String,
   },
@@ -20,7 +20,7 @@ interface Location {
 interface FlatLocation {
   city: String,
   country: String,
-  postalCode: String,
+  postcode: String,
   state: String,
   latitude: String,
   longitude: String,
@@ -37,13 +37,16 @@ interface FetchData {
 }
 
 const flatLocations = (locations: Location[]): FlatLocation[] => {
-  return locations.map(({coordinate, street, ...rest}): FlatLocation => {
+  return locations.map(({coordinates, street, city, country, postcode, state}): FlatLocation => {
     return {
-      ...rest,
+      city,
+      country,
+      postcode,
+      state,
       streetName: street.name,
       streetNumber: street.number,
-      latitude: coordinate?.latitude,
-      longitude: coordinate?.longitude
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude
     }
   })
 }
@@ -60,11 +63,40 @@ function App() {
     }
     fetchData();
   }, [])
+
+  const mapLocationToTableData = (location: FlatLocation) => {
+    return Object.values(location).map((locationValue, locationIdx) => {
+      if (typeof locationValue !== 'object') {
+        return <td key={locationIdx}>{locationValue}</td>
+      } else {
+        return null;
+      }
+    })
+  }
+
+  const mapLocationsToTable = (locations: FlatLocation[]) => {
+    return (
+      <table>
+        <thead><tr>{Object.keys(locations[0]).map((locationKey, locationIdx) => {
+          return (<th key={locationIdx}>{locationKey}</th>)
+        })}</tr></thead>
+        <tbody>
+          {
+          locations.map((location, locationIdx) => {
+            return (
+              <tr key={locationIdx}>{mapLocationToTableData(location)}</tr>
+            )
+          })}
+        </tbody>
+      </table>
+    )
+  }
+
   return (
     <div className="App">
       {locations.length > 0 ? (
-        'Render location here'
-      ) : 'No location fetched' }
+        mapLocationsToTable(locations)
+        ) : 'No location fetched' }
     </div>
   );
 }
