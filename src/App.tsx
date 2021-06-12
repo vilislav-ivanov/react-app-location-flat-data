@@ -1,5 +1,12 @@
-import React, { useState, useEffect } from 'react';
+
+
+
+
+import React, { useState, useEffect, ChangeEvent } from 'react';
 import axios from 'axios';
+
+import './App.css';
+ 
 
 const url = "https://randomuser.me/api/?results=20";
 
@@ -36,7 +43,7 @@ interface FetchData {
   results: Result[]
 }
 
-enum SortOptions {
+enum SortOption {
   ASCENDING = 'ASCENDING',
   DESCENDING = 'DESCENDING',
   UNSORTED = 'UNSORTED'
@@ -58,13 +65,15 @@ const flatLocations = (locations: Location[]): FlatLocation[] => {
 }
 
 interface MapLocationToSortOption {
-  [key: string]: SortOptions
+  [key: string]: SortOption
 }
 
 function App() {
   const [locations, setLocations] = useState<FlatLocation[]>([]);
+  const [filteredLcations, setFilteredLocations] = useState<FlatLocation[]>([]);
+  const [searchValue, setSearchValue] = useState<string>('');
   const [defaultLocations, setDefaultLocations] = useState<FlatLocation[]>([]);
-  // {street: SortOptions.UNSORTED, ...}
+  // mapLocationToSortOption = {street: SortOption.UNSORTED, ...}
   const [mapLocationToSortOption, setMapLocationToSortOption] = useState<MapLocationToSortOption>({})
 
   useEffect(() => {
@@ -81,7 +90,7 @@ function App() {
       const initialLocationSortOption: MapLocationToSortOption = {}
 
       for (const locationKey in flatedLocations[0]) {
-        initialLocationSortOption[locationKey] = SortOptions.UNSORTED;
+        initialLocationSortOption[locationKey] = SortOption.UNSORTED;
       }
 
       setMapLocationToSortOption(initialLocationSortOption);
@@ -98,50 +107,68 @@ function App() {
     })
   }
 
-  const onTableHeaderClickHandler = (field: (keyof FlatLocation)) => {
+  const handleTableFieldClicked = (field: (keyof FlatLocation)) => {
     // sort location by field on ascending/descending/default
-    let updatedLocations = [...locations]
-    const updateMapLocationToSortOption = { ...mapLocationToSortOption };
+    let updatedLocations = [...locations];
+    let updatedFilteredLocations = [...filteredLcations] || [];
+    const updatedMapLocationToSortOption = { ...mapLocationToSortOption };
 
-    if (mapLocationToSortOption[field] === SortOptions.DESCENDING) {
+    if (mapLocationToSortOption[field] === SortOption.DESCENDING) {
       // Change to unsorted & load default location unsorted
 
-      updateMapLocationToSortOption[field] = SortOptions.UNSORTED;
-      setMapLocationToSortOption(updateMapLocationToSortOption)
-      setLocations(defaultLocations);
-      return;
+      updatedMapLocationToSortOption[field] = SortOption.UNSORTED;
+      updatedLocations = defaultLocations;
     }
 
+    if (mapLocationToSortOption[field] === SortOption.UNSORTED) {
+      // previeous sort was unsorted so next is ascending
+      updatedMapLocationToSortOption[field] = SortOption.ASCENDING;
+
+      updatedLocations = sortLocations(updatedLocations, field, SortOption.ASCENDING)
+      updatedFilteredLocations = sortLocations(updatedFilteredLocations, field, SortOption.ASCENDING)
+    } 
+    if ((mapLocationToSortOption[field] === SortOption.ASCENDING)) {
+      // previeous sort was ascending so next is descending
+      updatedMapLocationToSortOption[field] = SortOption.DESCENDING;
+
+      updatedLocations = sortLocations(updatedLocations, field, SortOption.DESCENDING)
+      updatedFilteredLocations = sortLocations(updatedFilteredLocations, field, SortOption.DESCENDING)
+    }
+
+    setMapLocationToSortOption(updatedMapLocationToSortOption)
+    setLocations(updatedLocations);
+    setFilteredLocations(updatedFilteredLocations);
+  }
+
+  const sortLocations = (locations: FlatLocation[], field: (keyof FlatLocation), sortOption: SortOption) => {
+    let updatedLocations = [...locations]
     updatedLocations = updatedLocations.sort((a, b) => {
       if (a[field] > b[field]) {
-        if (mapLocationToSortOption[field] === SortOptions.UNSORTED) {
-          updateMapLocationToSortOption[field] = SortOptions.ASCENDING;
-          setMapLocationToSortOption(updateMapLocationToSortOption)
+        if (sortOption === SortOption.ASCENDING) {
           return 1;
         }
-        if (mapLocationToSortOption[field] === SortOptions.ASCENDING) {
-          updateMapLocationToSortOption[field] = SortOptions.DESCENDING;
-          setMapLocationToSortOption(updateMapLocationToSortOption)
-          return -1
+        if (sortOption === SortOption.DESCENDING) {
+          return -1;
         }
       }
       if (a[field] < b[field]) {
-        if (mapLocationToSortOption[field] === SortOptions.UNSORTED || mapLocationToSortOption[field] === SortOptions.DESCENDING) {
+        if (sortOption === SortOption.ASCENDING) {
           return -1;
-        } else {
-          return 1
+        }
+        if (sortOption === SortOption.DESCENDING) {
+          return 1;
         }
       }
-      return 0
+      return 0;
     })
-    setLocations(updatedLocations);
+    return updatedLocations;
   }
 
-  const mapLocationsToTable = (locations: FlatLocation[]) => {
+  const mapLocationsToTableElement = (locations: FlatLocation[]) => {
     return (
       <table>
         <thead><tr>{Object.keys(locations[0]).map((locationKey, locationIdx) => {
-          return (<th onClick={() => onTableHeaderClickHandler(locationKey as (keyof FlatLocation))} key={locationIdx}>{locationKey}</th>)
+          return (<th onClick={() => handleTableFieldClicked(locationKey as (keyof FlatLocation))} key={locationIdx}>{locationKey}</th>)
         })}</tr></thead>
         <tbody>
           {
@@ -155,11 +182,39 @@ function App() {
     )
   }
 
+  const handleSearchValueChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchValue(value);
+    filterLocation(value);
+  }
+
+  const filterLocation = (search: string) => {
+    const updatedFilteredLocations: FlatLocation[] = [];
+    locations.forEach(location => {
+      Object.values(location).forEach((value) => {
+        if (typeof value === 'string' && value.includes(search)) {
+          if (!updatedFilteredLocations.find(fl => fl === location)) {
+            updatedFilteredLocations.push(location);
+          }
+        }
+        setFilteredLocations(updatedFilteredLocations);
+      })
+    })
+  }
+
   return (
-    <div className="App">
-      {locations.length > 0 ? (
-        mapLocationsToTable(locations)
-      ) : 'No location fetched'}
+    <div>
+      <div className="App">
+        <div className="filter">
+          <input type="text" name="search" value={searchValue} onChange={handleSearchValueChange} />
+          <p className="display-filter">Searching for: {searchValue}</p>
+        </div>
+        {filteredLcations.length > 0 && searchValue.length > 0 ? (
+          mapLocationsToTableElement(filteredLcations)
+        ) : locations.length > 0 ? (
+          mapLocationsToTableElement(locations)
+        ) : 'No location fetched'}
+      </div>
     </div>
   );
 }
