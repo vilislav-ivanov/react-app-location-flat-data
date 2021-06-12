@@ -36,8 +36,14 @@ interface FetchData {
   results: Result[]
 }
 
+enum SortOptions {
+  ASCENDING = 'ASCENDING',
+  DESCENDING = 'DESCENDING',
+  UNSORTED = 'UNSORTED'
+}
+
 const flatLocations = (locations: Location[]): FlatLocation[] => {
-  return locations.map(({coordinates, street, city, country, postcode, state}): FlatLocation => {
+  return locations.map(({ coordinates, street, city, country, postcode, state }): FlatLocation => {
     return {
       city,
       country,
@@ -51,17 +57,35 @@ const flatLocations = (locations: Location[]): FlatLocation[] => {
   })
 }
 
+interface MapLocationToSortOption {
+  [key: string]: SortOptions
+}
+
 function App() {
   const [locations, setLocations] = useState<FlatLocation[]>([]);
+  const [defaultLocations, setDefaultLocations] = useState<FlatLocation[]>([]);
+  // {street: SortOptions.UNSORTED, ...}
+  const [mapLocationToSortOption, setMapLocationToSortOption] = useState<MapLocationToSortOption>({})
+
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchLocation = async () => {
       const { data } = await axios.get<FetchData>(url)
       const { results } = data;
       const fetchedLocations = results.map((res) => res.location);
+      return fetchedLocations;
+    }
+    fetchLocation().then(fetchedLocations => {
       const flatedLocations = flatLocations(fetchedLocations);
       setLocations(flatedLocations);
-    }
-    fetchData();
+      setDefaultLocations(flatedLocations);
+      const initialLocationSortOption: MapLocationToSortOption = {}
+
+      for (const locationKey in flatedLocations[0]) {
+        initialLocationSortOption[locationKey] = SortOptions.UNSORTED;
+      }
+
+      setMapLocationToSortOption(initialLocationSortOption);
+    });
   }, [])
 
   const mapLocationToTableData = (location: FlatLocation) => {
@@ -74,19 +98,58 @@ function App() {
     })
   }
 
+  const onTableHeaderClickHandler = (field: (keyof FlatLocation)) => {
+    // sort location by field on ascending/descending/default
+    let updatedLocations = [...locations]
+    const updateMapLocationToSortOption = { ...mapLocationToSortOption };
+
+    if (mapLocationToSortOption[field] === SortOptions.DESCENDING) {
+      // Change to unsorted & load default location unsorted
+
+      updateMapLocationToSortOption[field] = SortOptions.UNSORTED;
+      setMapLocationToSortOption(updateMapLocationToSortOption)
+      setLocations(defaultLocations);
+      return;
+    }
+
+    updatedLocations = updatedLocations.sort((a, b) => {
+      if (a[field] > b[field]) {
+        if (mapLocationToSortOption[field] === SortOptions.UNSORTED) {
+          updateMapLocationToSortOption[field] = SortOptions.ASCENDING;
+          setMapLocationToSortOption(updateMapLocationToSortOption)
+          return 1;
+        }
+        if (mapLocationToSortOption[field] === SortOptions.ASCENDING) {
+          updateMapLocationToSortOption[field] = SortOptions.DESCENDING;
+          setMapLocationToSortOption(updateMapLocationToSortOption)
+          return -1
+        }
+      }
+      if (a[field] < b[field]) {
+        if (mapLocationToSortOption[field] === SortOptions.UNSORTED || mapLocationToSortOption[field] === SortOptions.DESCENDING) {
+          return -1;
+        } else {
+          return 1
+        }
+      }
+      return 0
+    })
+    setLocations(updatedLocations);
+  }
+
   const mapLocationsToTable = (locations: FlatLocation[]) => {
     return (
       <table>
         <thead><tr>{Object.keys(locations[0]).map((locationKey, locationIdx) => {
-          return (<th key={locationIdx}>{locationKey}</th>)
+          return (<th onClick={() => onTableHeaderClickHandler(locationKey as (keyof FlatLocation))} key={locationIdx}>{locationKey}</th>)
         })}</tr></thead>
         <tbody>
           {
-          locations.map((location, locationIdx) => {
-            return (
-              <tr key={locationIdx}>{mapLocationToTableData(location)}</tr>
-            )
-          })}
+            locations.map((location, locationIdx) => {
+              return (
+                <tr key={locationIdx}>{mapLocationToTableData(location)}</tr>
+              )
+            })}
         </tbody>
       </table>
     )
@@ -96,7 +159,7 @@ function App() {
     <div className="App">
       {locations.length > 0 ? (
         mapLocationsToTable(locations)
-        ) : 'No location fetched' }
+      ) : 'No location fetched'}
     </div>
   );
 }
