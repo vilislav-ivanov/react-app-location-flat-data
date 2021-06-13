@@ -4,35 +4,36 @@
 
 import React, { useState, useEffect, ChangeEvent } from 'react';
 import axios from 'axios';
+import { v4 as uuid } from 'uuid';
 
 import './App.css';
- 
 
 const url = "https://randomuser.me/api/?results=20";
 
 interface Location {
-  city: String,
-  country: String,
-  postcode: String,
-  state: String,
+  city: string,
+  country: string,
+  postcode: string,
+  state: string,
   coordinates: {
-    latitude: String,
-    longitude: String,
+    latitude: string,
+    longitude: string,
   },
   street: {
     number: Number,
-    name: String
+    name: string
   }
 }
 interface FlatLocation {
-  city: String,
-  country: String,
-  postcode: String,
-  state: String,
-  latitude: String,
-  longitude: String,
+  id: string,
+  city: string,
+  country: string,
+  postcode: string,
+  state: string,
+  latitude: string,
+  longitude: string,
   streetNumber: Number,
-  streetName: String
+  streetName: string
 }
 
 interface Result {
@@ -52,6 +53,7 @@ enum SortOption {
 const flatLocations = (locations: Location[]): FlatLocation[] => {
   return locations.map(({ coordinates, street, city, country, postcode, state }): FlatLocation => {
     return {
+      id: uuid(),
       city,
       country,
       postcode,
@@ -68,6 +70,10 @@ interface MapLocationToSortOption {
   [key: string]: SortOption
 }
 
+interface MapLocationToFoundOnSearch {
+  [key: string]: boolean
+}
+
 function App() {
   const [locations, setLocations] = useState<FlatLocation[]>([]);
   const [filteredLcations, setFilteredLocations] = useState<FlatLocation[]>([]);
@@ -75,6 +81,8 @@ function App() {
   const [defaultLocations, setDefaultLocations] = useState<FlatLocation[]>([]);
   // mapLocationToSortOption = {street: SortOption.UNSORTED, ...}
   const [mapLocationToSortOption, setMapLocationToSortOption] = useState<MapLocationToSortOption>({})
+  // mapLocationToFoundOnSearch = { locationId: true/false }
+  const [mapLocationToFoundOnSearch, setMapLocationToFoundOnSearch] = useState<MapLocationToFoundOnSearch>({})
 
   useEffect(() => {
     const fetchLocation = async () => {
@@ -87,25 +95,21 @@ function App() {
       const flatedLocations = flatLocations(fetchedLocations);
       setLocations(flatedLocations);
       setDefaultLocations(flatedLocations);
-      const initialLocationSortOption: MapLocationToSortOption = {}
+      const initialLocationSortOption: MapLocationToSortOption = {};
+      const initialLocationToFoundOnSearch: MapLocationToFoundOnSearch = {};
 
       for (const locationKey in flatedLocations[0]) {
         initialLocationSortOption[locationKey] = SortOption.UNSORTED;
       }
 
+      for (const location of flatedLocations) {
+        initialLocationToFoundOnSearch[location.id] = false;
+      }
+
       setMapLocationToSortOption(initialLocationSortOption);
+      setMapLocationToFoundOnSearch(initialLocationToFoundOnSearch);
     });
   }, [])
-
-  const mapLocationToTableData = (location: FlatLocation) => {
-    return Object.values(location).map((locationValue, locationIdx) => {
-      if (typeof locationValue !== 'object') {
-        return <td key={locationIdx}>{locationValue}</td>
-      } else {
-        return null;
-      }
-    })
-  }
 
   const handleTableFieldClicked = (field: (keyof FlatLocation)) => {
     // sort location by field on ascending/descending/default
@@ -164,6 +168,16 @@ function App() {
     return updatedLocations;
   }
 
+  const mapLocationToTableData = (location: FlatLocation) => {
+    return Object.values(location).map((locationValue, locationIdx) => {
+      if (typeof locationValue !== 'object') {
+        return <td key={locationIdx}>{locationValue}</td>
+      } else {
+        return null;
+      }
+    })
+  }
+
   const mapLocationsToTableElement = (locations: FlatLocation[]) => {
     return (
       <table>
@@ -173,8 +187,9 @@ function App() {
         <tbody>
           {
             locations.map((location, locationIdx) => {
+              const className = mapLocationToFoundOnSearch[location.id] ? 'colored' : '';
               return (
-                <tr key={locationIdx}>{mapLocationToTableData(location)}</tr>
+                <tr className={className} key={locationIdx}>{mapLocationToTableData(location)}</tr>
               )
             })}
         </tbody>
@@ -190,16 +205,25 @@ function App() {
 
   const filterLocation = (search: string) => {
     const updatedFilteredLocations: FlatLocation[] = [];
+    const updatedMapLocationToFoundOnSearch: MapLocationToFoundOnSearch = {};
+
     locations.forEach(location => {
       Object.values(location).forEach((value) => {
         if (typeof value === 'string' && value.includes(search)) {
-          if (!updatedFilteredLocations.find(fl => fl === location)) {
+          if (
+            !updatedFilteredLocations.find(fl => fl === location)
+            && !updatedMapLocationToFoundOnSearch[location.id]
+            && search.length > 0
+          ) {
             updatedFilteredLocations.push(location);
+            updatedMapLocationToFoundOnSearch[location.id] = true;
           }
         }
         setFilteredLocations(updatedFilteredLocations);
       })
+      setMapLocationToFoundOnSearch(updatedMapLocationToFoundOnSearch);
     })
+
   }
 
   return (
@@ -210,7 +234,8 @@ function App() {
           <p className="display-filter">Searching for: {searchValue}</p>
         </div>
         {filteredLcations.length > 0 && searchValue.length > 0 ? (
-          mapLocationsToTableElement(filteredLcations)
+          // mapLocationsToTableElement(filteredLcations)
+          mapLocationsToTableElement(locations)
         ) : locations.length > 0 ? (
           mapLocationsToTableElement(locations)
         ) : 'No location fetched'}

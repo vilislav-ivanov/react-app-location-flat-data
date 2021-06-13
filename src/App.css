@@ -7,3 +7,7 @@
 .display-filter {
   width: 250px;
 }
+
+.colored {
+  background-color: blueviolet;
+}
